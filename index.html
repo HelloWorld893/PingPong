@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-    <title>Ping Pong Game</title>
+    <meta charset="UTF-8">
+    <title>ピンポンゲーム</title>
     <style>
         body {
             display: flex;
@@ -10,19 +11,20 @@
             background: #1a1a1a;
             margin: 0;
             height: 100vh;
-            font-family: Arial, sans-serif;
+            font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif;
         }
         #gameContainer {
             position: relative;
             width: 800px;
             height: 400px;
-            margin-top: 50px;
+            margin-top: 30px;
         }
         #gameBoard {
             width: 100%;
             height: 100%;
             background: #000;
             border: 2px solid #fff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
         }
         .paddle {
             width: 10px;
@@ -30,38 +32,84 @@
             background: white;
             position: absolute;
             top: 150px;
+            border-radius: 3px;
+            transition: box-shadow 0.2s;
         }
         #playerPaddle {
             left: 10px;
+            background: #4CAF50;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
         }
         #computerPaddle {
             right: 10px;
+            background: #f44336;
+            box-shadow: 0 0 10px rgba(244, 67, 54, 0.5);
         }
         #ball {
-            width: 15px;
-            height: 15px;
+            width: 12px;
+            height: 12px;
             background: white;
             position: absolute;
             border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        #scoreBoard {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 30px;
+            border-radius: 10px;
+            margin-top: 20px;
         }
         #score {
             color: white;
             font-size: 32px;
-            margin-top: 20px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
         }
-        #startButton {
-            margin-top: 20px;
-            padding: 10px 20px;
-            font-size: 18px;
-            background: #4CAF50;
+        .button {
+            margin: 10px;
+            padding: 12px 24px;
+            font-size: 16px;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            transition: background 0.3s;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        #startButton {
+            background: #4CAF50;
         }
         #startButton:hover {
             background: #45a049;
+            transform: translateY(-2px);
+        }
+        #difficultyButton {
+            background: #2196F3;
+        }
+        #difficultyButton:hover {
+            background: #1976D2;
+            transform: translateY(-2px);
+        }
+        .controls {
+            margin-top: 20px;
+            color: #888;
+            font-size: 14px;
+        }
+        #gameMessage {
+            color: white;
+            font-size: 24px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            display: none;
+        }
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            border-radius: 50%;
         }
     </style>
 </head>
@@ -71,10 +119,19 @@
             <div id="playerPaddle" class="paddle"></div>
             <div id="ball"></div>
             <div id="computerPaddle" class="paddle"></div>
+            <div id="gameMessage"></div>
         </div>
     </div>
-    <div id="score">0 - 0</div>
-    <button id="startButton">Start Game</button>
+    <div id="scoreBoard">
+        <div id="score">0 - 0</div>
+    </div>
+    <div style="margin-top: 20px">
+        <button id="startButton" class="button">ゲームスタート</button>
+        <button id="difficultyButton" class="button">難易度: 普通</button>
+    </div>
+    <div class="controls">
+        マウスを上下に動かしてパドルを操作 ・ 先に5点取った方の勝ち
+    </div>
 
     <script>
         const gameBoard = document.getElementById('gameBoard');
@@ -83,6 +140,8 @@
         const ball = document.getElementById('ball');
         const scoreDisplay = document.getElementById('score');
         const startButton = document.getElementById('startButton');
+        const difficultyButton = document.getElementById('difficultyButton');
+        const gameMessage = document.getElementById('gameMessage');
 
         let playerScore = 0;
         let computerScore = 0;
@@ -94,62 +153,136 @@
         let computerPaddleY = 150;
         let gameInterval;
         let isGameRunning = false;
+        let difficulty = 1;
+        let baseSpeed = 5;
+        let consecutiveHits = 0;
+        
+        const difficulties = [
+            { name: '簡単', speed: 0.7, reaction: 0.6 },
+            { name: '普通', speed: 1.0, reaction: 1.0 },
+            { name: '難しい', speed: 3, reaction: 1.4 }
+        ];
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 8; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                particle.style.width = '4px';
+                particle.style.height = '4px';
+                particle.style.background = color;
+                particle.style.opacity = '1';
+
+                const angle = (Math.random() * Math.PI * 2);
+                const speed = Math.random() * 3 + 2;
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+
+                gameBoard.appendChild(particle);
+
+                let opacity = 1;
+                const animate = () => {
+                    if (opacity <= 0) {
+                        particle.remove();
+                        return;
+                    }
+                    opacity -= 0.05;
+                    particle.style.opacity = opacity;
+                    particle.style.left = (parseFloat(particle.style.left) + vx) + 'px';
+                    particle.style.top = (parseFloat(particle.style.top) + vy) + 'px';
+                    requestAnimationFrame(animate);
+                };
+                requestAnimationFrame(animate);
+            }
+        }
+
+        function showMessage(text, duration = 1500) {
+            gameMessage.textContent = text;
+            gameMessage.style.display = 'block';
+            setTimeout(() => {
+                gameMessage.style.display = 'none';
+            }, duration);
+        }
 
         function resetBall() {
             ballX = 400;
             ballY = 200;
-            ballSpeedX = Math.random() > 0.5 ? 5 : -5;
-            ballSpeedY = (Math.random() * 6) - 3;
+            const speed = baseSpeed * difficulties[difficulty].speed;
+            ballSpeedX = (Math.random() > 0.5 ? speed : -speed) * (1 + consecutiveHits * 0.1);
+            ballSpeedY = (Math.random() * 6 - 3) * difficulties[difficulty].speed;
+            consecutiveHits = 0;
         }
 
         function updateGame() {
-            // Move ball
             ballX += ballSpeedX;
             ballY += ballSpeedY;
 
-            // Ball collision with top and bottom
             if (ballY <= 0 || ballY >= 385) {
                 ballSpeedY = -ballSpeedY;
+                createParticles(ballX, ballY, '#fff');
             }
 
-            // Ball collision with paddles
             if (ballX <= 20 && ballY >= playerPaddleY && ballY <= playerPaddleY + 100) {
-                ballSpeedX = -ballSpeedX;
+                ballSpeedX = -ballSpeedX * 1.1;
                 const diff = ballY - (playerPaddleY + 50);
                 ballSpeedY = diff * 0.2;
+                consecutiveHits++;
+                createParticles(ballX, ballY, '#4CAF50');
+                
+                if (consecutiveHits > 3) {
+                    showMessage('ナイスラリー！');
+                }
             }
 
             if (ballX >= 775 && ballY >= computerPaddleY && ballY <= computerPaddleY + 100) {
-                ballSpeedX = -ballSpeedX;
+                ballSpeedX = -ballSpeedX * 1.1;
                 const diff = ballY - (computerPaddleY + 50);
                 ballSpeedY = diff * 0.2;
+                consecutiveHits++;
+                createParticles(ballX, ballY, '#f44336');
             }
 
-            // Scoring
             if (ballX <= 0) {
                 computerScore++;
                 updateScore();
+                showMessage('相手の得点！');
                 resetBall();
             }
             if (ballX >= 800) {
                 playerScore++;
                 updateScore();
+                showMessage('得点！');
                 resetBall();
             }
 
-            // Computer AI
-            const computerSpeed = 4;
+            const computerSpeed = 4 * difficulties[difficulty].reaction;
             const computerCenter = computerPaddleY + 50;
-            if (computerCenter < ballY - 35) {
+            const prediction = ballY + (Math.random() - 0.5) * 30;
+            
+            if (computerCenter < prediction - 35) {
                 computerPaddleY += computerSpeed;
-            } else if (computerCenter > ballY + 35) {
+            } else if (computerCenter > prediction + 35) {
                 computerPaddleY -= computerSpeed;
             }
 
-            // Update positions
+            computerPaddleY = Math.max(0, Math.min(300, computerPaddleY));
+
             ball.style.left = ballX + 'px';
             ball.style.top = ballY + 'px';
             computerPaddle.style.top = computerPaddleY + 'px';
+
+            checkWinCondition();
+        }
+
+        function checkWinCondition() {
+            if (playerScore >= 5 || computerScore >= 5) {
+                const message = playerScore >= 5 ? 'おめでとう！あなたの勝ちです！' : '残念！相手の勝ちです...';
+                showMessage(message, 3000);
+                clearInterval(gameInterval);
+                isGameRunning = false;
+                startButton.textContent = 'もう一度プレイ';
+            }
         }
 
         function updateScore() {
@@ -164,7 +297,10 @@
         }
 
         function startGame() {
-            if (isGameRunning) return;
+            if (isGameRunning) {
+                clearInterval(gameInterval);
+                isGameRunning = false;
+            }
             
             isGameRunning = true;
             playerScore = 0;
@@ -172,19 +308,18 @@
             updateScore();
             resetBall();
             gameInterval = setInterval(updateGame, 1000/60);
-            startButton.textContent = 'Restart Game';
+            startButton.textContent = 'リセット';
+            showMessage('ゲームスタート！');
         }
 
-        gameBoard.addEventListener('mousemove', handleMouseMove);
-        startButton.addEventListener('click', () => {
-            if (isGameRunning) {
-                clearInterval(gameInterval);
-                isGameRunning = false;
-            }
-            startGame();
+        difficultyButton.addEventListener('click', () => {
+            difficulty = (difficulty + 1) % difficulties.length;
+            difficultyButton.textContent = `難易度: ${difficulties[difficulty].name}`;
         });
 
-        // Initial setup
+        gameBoard.addEventListener('mousemove', handleMouseMove);
+        startButton.addEventListener('click', startGame);
+
         resetBall();
     </script>
 </body>
